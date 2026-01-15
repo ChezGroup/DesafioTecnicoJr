@@ -12,7 +12,7 @@ Não existe uma resposta perfeita. O que importa são as **decisões técnicas**
 
 ## 🎯 Contexto do Problema
 
-Imagine que você está trabalhando em um sistema que processa documentos digitalizados. O sistema recebe textos extraídos via **OCR (Optical Character Recognition)** ou respostas de uma **IA**, que nem sempre são perfeitos:
+Imagine que você está trabalhando em um sistema que processa documentos digitalizados. O sistema recebe textos extraídos via **OCR (Optical Character Recognition)**, que nem sempre são perfeitos:
 
 - Podem conter erros de leitura
 - Formatação inconsistente
