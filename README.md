@@ -191,7 +191,7 @@ Implemente a lógica de processamento que deve:
          "valorTotal": 9.58
        },
        {
-         "descricao": "Pao Forma",
+         "descricao": "Pão Forma",
          "quantidade": 1,
          "valorUnitario": 7.90,
          "valorTotal": 7.90
