@@ -1,4 +1,4 @@
-# Desafio Técnico — Desenvolvedor Júnior
+ Desafio Técnico — Desenvolvedor Júnior
 
 ## 📋 Sobre o Desafio
 
