@@ -13,7 +13,7 @@ export const DadosEstruturadosSchema = z.object({
     .string()
     .regex(
       /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/,
-      "CNPJ deve estar no formato XX.XXX.XXX/XXXX-XX"
+      "CNPJ deve estar no formato XX.XXX.XXX/XXXX-XX",
     )
     .optional(), // optional = pode não existir
   data: z
@@ -26,6 +26,10 @@ export const DadosEstruturadosSchema = z.object({
   itens: z.array(ItemNotaSchema).optional(),
   valorTotal: z.number().positive("Valor total deve ser positivo"),
   formaPagamento: z.string().optional(),
+
+  observacoes: z.string().optional(),
+  valorAproximado: z.boolean().optional(),
+  subtotal: z.number().optional(),
 });
 
 export const ConfiancaSchema = z.object({
