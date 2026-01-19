@@ -41,6 +41,7 @@ export const ConfiancaSchema = z.object({
 export const ResultadoProcessamentoSchema = z.object({
   dados: DadosEstruturadosSchema,
   confianca: ConfiancaSchema,
+  confiancaInicial: ConfiancaSchema.optional(),
 });
 
 export type ItemNota = z.infer<typeof ItemNotaSchema>;

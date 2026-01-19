@@ -48,6 +48,20 @@ REGRAS DE CORREÇÃO:
    
 7. Use português correto com acentos nos nomes
 
+8. Ignore linhas decorativas ou irrelevantes (ex: "***", "----").
+
+9. Corrija abreviações e erros comuns de produtos e formas de pagamento.
+
+10. Se encontrar "desconto", "taxa", "troco", inclua no campo "observacoes".
+
+11. Garanta que todos os campos estejam no formato correto, corrigindo se necessário.
+
+12. Priorize o valor total escrito na nota; se houver divergência, explique em "observacoes".
+
+13. Corrija acentuação e capitalização dos nomes.
+
+14. Sugira um campo "confianca" com score (0 a 1) e detalhes dos problemas detectados.
+
 EXEMPLO DE ANÁLISE:
 Texto: "ar oz t1  2k  1,80"
 Interpretação:

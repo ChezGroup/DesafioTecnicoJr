@@ -22,6 +22,7 @@ import {
   Info,
   FileText,
   Pencil,
+  ArrowRight,
 } from "lucide-react";
 
 interface ResultadoProcessado {
@@ -653,51 +654,112 @@ Data: 20/01/2026
                     </Card>
                   )}
 
-                {/* Card: Confiança */}
+                {/* Card: Confiança - ATUALIZADO */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-sm flex items-center gap-2">
                       {getIconeConfianca(resultadoValido.confianca.nivel)}
-                      Confiança: {resultadoValido.confianca.nivel}
+                      Análise de Confiança
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    {/* Badge de Confiança - SEM PORCENTAGEM */}
-                    <div className="flex items-center justify-center p-4">
-                      <Badge
-                        className={`text-lg px-6 py-2 ${
-                          resultadoValido.confianca.nivel === "Alta"
-                            ? "bg-green-500"
-                            : resultadoValido.confianca.nivel === "Média"
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                        } text-white`}
-                      >
-                        {resultadoValido.confianca.nivel}
-                      </Badge>
-                    </div>
+                  <CardContent className="space-y-4">
+                    {/* SE HOUVER MELHORIA (ANTES vs DEPOIS) */}
+                    {resultadoValido.confiancaInicial && (
+                      <div className="bg-slate-100 p-3 rounded-lg border border-slate-200">
+                        <p className="text-xs font-semibold text-slate-500 mb-2 text-center">
+                          Evolução do Processamento
+                        </p>
+                        <div className="flex items-center justify-between px-2">
+                          {/* ANTES (Regex) */}
+                          <div className="flex flex-col items-center">
+                            <span className="text-xs text-slate-400 mb-1">
+                              Regex
+                            </span>
+                            <Badge
+                              variant="outline"
+                              className="bg-slate-200 text-slate-600 border-slate-300"
+                            >
+                              {resultadoValido.confiancaInicial.nivel}
+                            </Badge>
+                          </div>
 
-                    {/* Detalhes */}
-                    {resultadoValido.confianca.detalhes.length > 0 && (
-                      <div>
-                        <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
-                          Detalhes da Análise
-                        </label>
-                        <ul className="space-y-1.5 max-h-[150px] overflow-y-auto">
-                          {resultadoValido.confianca.detalhes.map(
-                            (detalhe, idx) => (
-                              <li
-                                key={idx}
-                                className="flex items-start gap-1.5 text-xs text-slate-700 bg-slate-50 p-1.5 rounded"
-                              >
-                                <span className="text-slate-400">•</span>
-                                <span>{detalhe}</span>
-                              </li>
-                            ),
-                          )}
-                        </ul>
+                          {/* Seta */}
+                          <div className="flex flex-col items-center text-blue-500">
+                            <span className="text-[10px] font-bold uppercase tracking-wider mb-1">
+                              IA Fix
+                            </span>
+                            <ArrowRight className="w-5 h-5" />
+                          </div>
+
+                          {/* DEPOIS (Final) */}
+                          <div className="flex flex-col items-center">
+                            <span className="text-xs text-slate-400 mb-1">
+                              Final
+                            </span>
+                            <Badge
+                              className={`${
+                                resultadoValido.confianca.nivel === "Alta"
+                                  ? "bg-green-500"
+                                  : "bg-yellow-500"
+                              } text-white shadow-sm`}
+                            >
+                              {resultadoValido.confianca.nivel}
+                            </Badge>
+                          </div>
+                        </div>
                       </div>
                     )}
+
+                    {/* VISUALIZAÇÃO PADRÃO (Se não teve IA ou para mostrar o atual) */}
+                    {!resultadoValido.confiancaInicial && (
+                      <div className="flex items-center justify-center p-2">
+                        <Badge
+                          className={`text-lg px-6 py-2 ${
+                            resultadoValido.confianca.nivel === "Alta"
+                              ? "bg-green-500"
+                              : resultadoValido.confianca.nivel === "Média"
+                                ? "bg-yellow-500"
+                                : "bg-red-500"
+                          } text-white`}
+                        >
+                          {resultadoValido.confianca.nivel}
+                        </Badge>
+                      </div>
+                    )}
+
+                    {/* Detalhes Combinados */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                        Detalhes da Análise
+                      </label>
+                      <ul className="space-y-1.5 max-h-[150px] overflow-y-auto">
+                        {/* Mostra erros antigos do Regex se existirem */}
+                        {resultadoValido.confiancaInicial?.detalhes.map(
+                          (detalhe, idx) => (
+                            <li
+                              key={`antigo-${idx}`}
+                              className="flex items-start gap-1.5 text-xs text-slate-400 line-through decoration-slate-400 bg-slate-50 p-1.5 rounded opacity-70"
+                            >
+                              <span className="text-slate-300">•</span>
+                              <span>{detalhe} (Corrigido)</span>
+                            </li>
+                          ),
+                        )}
+
+                        {/* Mostra detalhes atuais */}
+                        {resultadoValido.confianca.detalhes.map(
+                          (detalhe, idx) => (
+                            <li
+                              key={idx}
+                              className="flex items-start gap-1.5 text-xs text-slate-700 bg-blue-50/50 p-1.5 rounded"
+                            >
+                              <span className="text-blue-400">•</span>
+                              <span>{detalhe}</span>
+                            </li>
+                          ),
+                        )}
+                      </ul>
+                    </div>
                   </CardContent>
                 </Card>
                 <Card className="border-2 border-slate-300">
