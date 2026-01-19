@@ -151,18 +151,19 @@ export async function processarTextoOCR(
   function corrigirErrosOCR(texto: string): string {
     let corrigido = texto;
 
-    // O maiúsculo no meio/fim de números → 0
     corrigido = corrigido.replace(/(\d)O(\d)/g, "$10$2");
     corrigido = corrigido.replace(/(\d)O\b/g, "$10");
     corrigido = corrigido.replace(/\bO(\d)/g, "0$1");
 
-    // l (letra L minúscula) em contexto numérico → 1
     corrigido = corrigido.replace(/\bl(\d)/g, "1$1");
     corrigido = corrigido.replace(/(\d)l\b/g, "$11");
 
-    // Espaços múltiplos em números (ex: "1 ,80" → "1,80")
     corrigido = corrigido.replace(/(\d)\s+([,.]\s*\d)/g, "$1$2");
     corrigido = corrigido.replace(/(\d[,.])\s+(\d)/g, "$1$2");
+    corrigido = corrigido.replace(/R\$(\d)/gi, "R$ $1");
+    corrigido = corrigido.replace(/(\d+[,.]?\d*)R\$/gi, "R$ $1");
+    corrigido = corrigido.replace(/\bRS\s*(\d)/gi, "R$ $1");
+    corrigido = corrigido.replace(/R\s+\$/gi, "R$");
 
     return corrigido;
   }
@@ -335,39 +336,100 @@ export async function processarTextoOCR(
   }
 
   function extrairData(texto: string): string | undefined {
-    // Primeiro tenta com prefixos explícitos (Data:, Dt:, etc)
     const regexComPrefixo =
       /(?:data|da\s*a|dt)[:\s\-]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i;
     let match = texto.match(regexComPrefixo);
 
-    // Se não encontrar, tenta buscar data sem prefixo
-    if (!match) {
-      // Busca padrão DD/MM/YYYY ou DD-MM-YYYY em qualquer lugar
-      const regexSemPrefixo = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/;
-      match = texto.match(regexSemPrefixo);
+    if (match) {
+      return formatarData(match[1], match[2], match[3]);
     }
 
+    // Estratégia 2: Datas sem prefixo (DD/MM/YYYY ou DD-MM-YYYY)
+    const regexSemPrefixo = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/;
+    match = texto.match(regexSemPrefixo);
+
     if (match) {
-      let [_, dia, mes, ano] = match;
+      return formatarData(match[1], match[2], match[3]);
+    }
+    const regexDataExtenso =
+      /\b(\d{1,2})\s+(?:de\s+)?(jan(?:eiro)?|fev(?:ereiro)?|mar(?:ço|co)?|abr(?:il)?|mai(?:o)?|jun(?:ho)?|jul(?:ho)?|ago(?:sto)?|set(?:embro)?|out(?:ubro)?|nov(?:embro)?|dez(?:embro)?)\s+(?:de\s+)?(\d{4})\b/i;
 
-      // Converte ano de 2 dígitos para 4
-      if (ano.length === 2) {
-        ano = "20" + ano;
+    match = texto.match(regexDataExtenso);
+
+    if (match) {
+      const dia = match[1];
+      const mesExtenso = match[2].toLowerCase();
+      const ano = match[3];
+
+      const mesesMap: Record<string, string> = {
+        jan: "01",
+        janeiro: "01",
+        fev: "02",
+        fevereiro: "02",
+        mar: "03",
+        março: "03",
+        marco: "03",
+        abr: "04",
+        abril: "04",
+        mai: "05",
+        maio: "05",
+        jun: "06",
+        junho: "06",
+        jul: "07",
+        julho: "07",
+        ago: "08",
+        agosto: "08",
+        set: "09",
+        setembro: "09",
+        out: "10",
+        outubro: "10",
+        nov: "11",
+        novembro: "11",
+        dez: "12",
+        dezembro: "12",
+      };
+
+      const mesNumerico = Object.keys(mesesMap).find((key) =>
+        mesExtenso.startsWith(key),
+      );
+
+      if (mesNumerico) {
+        return formatarData(dia, mesesMap[mesNumerico], ano);
       }
+    }
 
-      dia = dia.padStart(2, "0");
-      mes = mes.padStart(2, "0");
+    const regexISO = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+    match = texto.match(regexISO);
 
-      const dataStr = `${dia}/${mes}/${ano}`;
+    if (match) {
+      const [_, ano, mes, dia] = match;
+      return formatarData(dia, mes, ano);
+    }
 
-      // Valida se é uma data real
-      const dataObj = parse(dataStr, "dd/MM/yyyy", new Date(), {
-        locale: ptBR,
-      });
+    return undefined;
+  }
 
-      if (isValid(dataObj)) {
-        return format(dataObj, "yyyy-MM-dd");
-      }
+  function formatarData(
+    dia: string,
+    mes: string,
+    ano: string,
+  ): string | undefined {
+    if (ano.length === 2) {
+      const anoNum = parseInt(ano);
+      ano = anoNum > 50 ? `19${ano}` : `20${ano}`;
+    }
+
+    dia = dia.padStart(2, "0");
+    mes = mes.padStart(2, "0");
+
+    const dataStr = `${dia}/${mes}/${ano}`;
+
+    const dataObj = parse(dataStr, "dd/MM/yyyy", new Date(), {
+      locale: ptBR,
+    });
+
+    if (isValid(dataObj)) {
+      return format(dataObj, "yyyy-MM-dd");
     }
 
     return undefined;
