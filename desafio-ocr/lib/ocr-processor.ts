@@ -6,6 +6,150 @@ import {
   ResultadoProcessamento,
 } from "./types";
 import { ptBR } from "date-fns/locale";
+import { extrairComIA } from "./ai-correction";
+
+export async function processarTextoOCR(
+  texto: string,
+): Promise<ResultadoProcessamento> {
+  const textoCorrigido = corrigirErrosOCR(texto);
+
+  const linhas = textoCorrigido
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean);
+
+  const dados: Partial<DadosEstruturados> = {};
+  const problemasEncontrados: string[] = [];
+
+  dados.estabelecimento = extrairEstabelecimento(linhas);
+  dados.cnpj = extrairCNPJ(textoCorrigido);
+
+  const dataExtraida = extrairData(texto);
+  if (dataExtraida) {
+    dados.data = dataExtraida;
+  } else {
+    dados.data = "Data não identificada";
+    problemasEncontrados.push("Data não pôde ser extraída ou validada");
+  }
+
+  dados.hora = extrairHora(textoCorrigido);
+  dados.formaPagamento = extrairFormaPagamento(textoCorrigido);
+  dados.valorAproximado = detectarValorAproximado(textoCorrigido);
+  dados.subtotal = extrairSubtotal(textoCorrigido);
+  dados.observacoes = extrairObservacoes(textoCorrigido);
+  dados.itens = extrairItens(linhas);
+
+  dados.valorTotal = determinarValorTotal(
+    textoCorrigido,
+    dados.itens,
+    dados.subtotal,
+  );
+
+  let resultadoRegex: ResultadoProcessamento;
+
+  // === VALIDAÇÃO COM ZOD ===
+  try {
+    const dadosValidados = DadosEstruturadosSchema.parse(dados);
+    const confianca = calcularConfianca(dadosValidados, problemasEncontrados);
+
+    resultadoRegex = {
+      dados: dadosValidados,
+      confianca,
+    };
+  } catch (error: any) {
+    const errosZod =
+      error.errors?.map((e: any) => `${e.path.join(".")}: ${e.message}`) || [];
+    problemasEncontrados.push(...errosZod);
+
+    resultadoRegex = {
+      dados: dados as DadosEstruturados,
+      confianca: {
+        score: 0.2,
+        nivel: "Baixa",
+        detalhes: problemasEncontrados,
+      },
+    };
+  }
+
+  // 🔥 NOVA LÓGICA: Verifica se os itens têm descrições inválidas (OCR ruim)
+  const itensComOCRRuim = resultadoRegex.dados.itens?.some((item) => {
+    const desc = item.descricao.toLowerCase();
+    // Detecta se tem muitos espaços soltos ou fragmentos típicos de OCR ruim
+    return (
+      /\s[a-z]{1,2}\s|\s{2,}|[a-z]\s[a-z]\s/.test(desc) ||
+      desc.split(" ").some((palavra) => palavra.length === 1 && palavra !== "l")
+    );
+  });
+
+  // 🔥 Verifica inconsistências graves
+  const somaItens =
+    resultadoRegex.dados.itens?.reduce(
+      (acc, item) => acc + item.valorTotal,
+      0,
+    ) || 0;
+
+  const diferencaGrande =
+    Math.abs(somaItens - resultadoRegex.dados.valorTotal) > 5;
+
+  const precisaDeAjuda =
+    resultadoRegex.confianca.score < 0.6 ||
+    !resultadoRegex.dados.valorTotal ||
+    (resultadoRegex.dados.itens && resultadoRegex.dados.itens.length === 0) ||
+    itensComOCRRuim || // 🆕 Nova condição
+    diferencaGrande; // 🆕 Nova condição
+
+  if (precisaDeAjuda) {
+    console.log("⚠️ Detectado problema no OCR. Acionando IA para correção...");
+
+    if (itensComOCRRuim) {
+      console.log("   → Itens com OCR ruim detectados");
+    }
+    if (diferencaGrande) {
+      console.log(
+        `   → Diferença grande: soma itens (${somaItens}) vs total (${resultadoRegex.dados.valorTotal})`,
+      );
+    }
+
+    const dadosIA = await extrairComIA(texto);
+
+    if (dadosIA) {
+      // Recalcula confiança baseada nos dados da IA
+      const problemasIA: string[] = [];
+
+      // Penalidade por precisar de IA (OCR estava muito ruim)
+      if (itensComOCRRuim) {
+        problemasIA.push(
+          "OCR com qualidade muito baixa - necessitou correção por IA",
+        );
+      }
+
+      const confianciaIA = calcularConfianca(dadosIA, problemasIA);
+
+      // Reduz confiança em 0.20 por ter precisado de IA (OCR muito ruim)
+      let scoreAjustado = confianciaIA.score - 0.2;
+      scoreAjustado = Math.max(0.2, Math.min(1, scoreAjustado)); // Mínimo 0.2, máximo 1.0
+
+      let nivelAjustado: "Alta" | "Média" | "Baixa";
+      if (scoreAjustado >= 0.8) nivelAjustado = "Alta";
+      else if (scoreAjustado >= 0.5) nivelAjustado = "Média";
+      else nivelAjustado = "Baixa";
+
+      return {
+        dados: dadosIA,
+        confianca: {
+          score: scoreAjustado,
+          nivel: nivelAjustado,
+          detalhes: [
+            ...confianciaIA.detalhes,
+            "✨ Processado e corrigido via IA (Google Gemini)",
+          ],
+        },
+      };
+    }
+  }
+
+  return resultadoRegex;
+}
 
 function corrigirErrosOCR(texto: string): string {
   let corrigido = texto;
@@ -33,7 +177,6 @@ function detectarValorAproximado(texto: string): boolean {
 function extrairObservacoes(texto: string): string | undefined {
   const observacoes: string[] = [];
 
-  // Detecta volume (qualquer unidade: L, kg, ml, etc)
   const matchVolume = texto.match(
     /vol(?:ume)?[:\s]*(\d+[,.]?\d*)\s*([a-zA-Z]+)/i,
   );
@@ -43,7 +186,6 @@ function extrairObservacoes(texto: string): string | undefined {
     );
   }
 
-  // Detecta preço unitário (por litro, por kg, etc)
   const matchPrecoUnit = texto.match(
     /(?:preco|pre[cç]o|r\$)[\/\s]*([a-zA-Z]+)[:\s]*(\d+[,.]?\d*)/i,
   );
@@ -53,13 +195,11 @@ function extrairObservacoes(texto: string): string | undefined {
     );
   }
 
-  // Detecta taxa de serviço
   const matchTaxa = texto.match(/(?:tx|taxa).*?(\d+)%/i);
   if (matchTaxa) {
     observacoes.push(`Taxa de serviço: ${matchTaxa[1]}%`);
   }
 
-  // Detecta troco/resto
   const matchTroco = texto.match(
     /(?:troco|rest(?:o)?|volta)[:\s]*(\d+[,.]?\d*)/i,
   );
@@ -67,7 +207,6 @@ function extrairObservacoes(texto: string): string | undefined {
     observacoes.push(`Troco: R$ ${matchTroco[1].replace(",", ".")}`);
   }
 
-  // Detecta valor pago
   const matchPago = texto.match(
     /(?:dinheiro|pago|recebido)[:\s]*(\d+[,.]?\d*)/i,
   );
@@ -75,13 +214,11 @@ function extrairObservacoes(texto: string): string | undefined {
     observacoes.push(`Valor pago: R$ ${matchPago[1].replace(",", ".")}`);
   }
 
-  // Detecta desconto
   const matchDesconto = texto.match(/desconto[:\s]*(\d+[,.]?\d*)/i);
   if (matchDesconto) {
     observacoes.push(`Desconto: R$ ${matchDesconto[1].replace(",", ".")}`);
   }
 
-  // Detecta mesa/comanda (restaurantes)
   const matchMesa = texto.match(/(?:mesa|comanda)[:\s]*(\d+)/i);
   if (matchMesa) {
     observacoes.push(`Mesa/Comanda: ${matchMesa[1]}`);
@@ -108,16 +245,13 @@ function determinarValorTotal(
   for (const linha of linhas) {
     const linhaLimpa = linha.trim().toLowerCase();
 
-    // Ignora se tem "sub" antes de total
     if (linhaLimpa.includes("sub")) continue;
 
-    // Procura "TOTAL" no início da linha
     if (
       /^(?:to\s*al|total|valor\s*(?:a\s*pagar|total)|total\s*(?:a\s*pagar)?)/i.test(
         linha,
       )
     ) {
-      // Extrai o último número da linha (total)
       const numeros = linha.match(/\d+[,.]?\d*/g);
       if (numeros && numeros.length > 0) {
         const ultimoNumero = numeros[numeros.length - 1];
@@ -131,7 +265,6 @@ function determinarValorTotal(
     const matchTaxa = texto.match(/(?:tx|taxa)[^0-9]*(\d+[,.]?\d*)/i);
     if (matchTaxa) {
       const valorTaxa = parseFloat(matchTaxa[1].replace(",", "."));
-      // Verifica se faz sentido (taxa entre 0.1% e 30% do subtotal)
       if (valorTaxa > 0 && valorTaxa < subtotal * 0.3) {
         return subtotal + valorTaxa;
       }
@@ -146,7 +279,6 @@ function determinarValorTotal(
     const volume = parseFloat(matchVolume[1].replace(",", "."));
     const preco = parseFloat(matchPreco[1].replace(",", "."));
     const calculado = volume * preco;
-    // Verifica se o valor calculado está próximo de algum valor no texto
     const matchValorTexto = texto.match(/(\d{2,}[,.]?\d*)/g);
     if (matchValorTexto) {
       const valores = matchValorTexto.map((v) =>
@@ -179,93 +311,22 @@ function determinarValorTotal(
   return 0;
 }
 
-export function processarTextoOCR(texto: string): ResultadoProcessamento {
-  const textoCorrigido = corrigirErrosOCR(texto);
-
-  const linhas = textoCorrigido
-    .split("\n")
-    .map((linha) => linha.trim())
-    .filter(Boolean);
-
-  const dados: Partial<DadosEstruturados> = {};
-
-  const problemasEncontrados: string[] = [];
-
-  dados.estabelecimento = extrairEstabelecimento(linhas);
-  dados.cnpj = extrairCNPJ(textoCorrigido);
-
-  const dataExtraida = extrairData(texto);
-  if (dataExtraida) {
-    dados.data = dataExtraida;
-  } else {
-    dados.data = "Data não identificada";
-    problemasEncontrados.push("Data não pôde ser extraída ou validada");
-  }
-
-  dados.hora = extrairHora(textoCorrigido);
-  dados.formaPagamento = extrairFormaPagamento(textoCorrigido);
-
-  dados.valorAproximado = detectarValorAproximado(textoCorrigido);
-  dados.subtotal = extrairSubtotal(textoCorrigido);
-  dados.observacoes = extrairObservacoes(textoCorrigido);
-
-  dados.itens = extrairItens(linhas);
-
-  dados.valorTotal = determinarValorTotal(
-    textoCorrigido,
-    dados.itens,
-    dados.subtotal,
-  );
-
-  // === VALIDAÇÃO COM ZOD ===
-  try {
-    const dadosValidados = DadosEstruturadosSchema.parse(dados);
-
-    const confianca = calcularConfianca(dadosValidados, problemasEncontrados);
-    return {
-      dados: dadosValidados,
-      confianca,
-    };
-  } catch (error: any) {
-    const errosZod =
-      error.errors?.map((e: any) => `${e.path.join(".")}: ${e.message}`) || [];
-    problemasEncontrados.push(...errosZod);
-
-    return {
-      dados: dados as DadosEstruturados,
-      confianca: {
-        score: 0.2,
-        nivel: "Baixa",
-        detalhes: problemasEncontrados,
-      },
-    };
-  }
-}
-
 function extrairEstabelecimento(linhas: string[]): string {
-  // Loop pelas primeiras 5 linhas apenas (estabelecimento geralmente está no topo)
   for (const linha of linhas.slice(0, 5)) {
-    // Se a linha tem menos de 3 caracteres, provavelmente não é o nome
-    // Se contém "CNPJ", é a linha do documento, não o nome
     if (linha.length < 3 || linha.includes("CNPJ")) continue;
-    // regex que verifica se a linha contém APENAS números e símbolos
     if (/^[\d\s\-\/\*]+$/.test(linha)) continue;
-
     return linha;
   }
   return "Estabelecimento não identificado";
 }
 
 function extrairCNPJ(texto: string): string | undefined {
-  // Regex para CNPJ com ou sem formatação
   const regexCNPJ = /CNPJ[:\s]*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i;
   const match = texto.match(regexCNPJ);
 
   if (match) {
-    // Remove caracteres não numéricos
     const cnpjLimpo = match[1].replace(/\D/g, "");
     if (cnpjLimpo.length === 14) {
-      // Formata no padrão XX.XXX.XXX/XXXX-XX
       return cnpjLimpo.replace(
         /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
         "$1.$2.$3/$4-$5",
@@ -277,7 +338,6 @@ function extrairCNPJ(texto: string): string | undefined {
 }
 
 function extrairData(texto: string): string | undefined {
-  // Aceita: 15/01/2026, 15-01-26, 1/1/26, etc
   const regexData = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/;
   const match = texto.match(regexData);
 
@@ -302,38 +362,20 @@ function extrairData(texto: string): string | undefined {
 }
 
 function extrairHora(texto: string): string | undefined {
-  // Regex para hora (aceita : ou . como separador)
   const regexHora = /(\d{1,2})[:.](\d{2})/;
-
   const match = texto.match(regexHora);
 
   if (match) {
     const [_, hora, minuto] = match;
     const horaFormatada = `${hora.padStart(2, "0")}:${minuto}`;
-    // Valida se hora e minuto estão dentro dos limites
     const h = parseInt(hora);
     const m = parseInt(minuto);
 
-    // Hora deve ser 0-23, minuto deve ser 0-59
     if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
       return horaFormatada;
     }
   }
   return undefined;
-}
-
-function extrairValorTotal(texto: string): number {
-  const linhas = texto.split("\n");
-
-  for (const linha of linhas) {
-    if (/total/i.test(linha)) {
-      const match = linha.match(/(\d+)[,.](\d{2})/);
-      if (match) {
-        return parseFloat(`${match[1]}.${match[2]}`);
-      }
-    }
-  }
-  return 0;
 }
 
 function extrairItens(linhas: string[]): ItemNota[] {
@@ -347,12 +389,10 @@ function extrairItens(linhas: string[]): ItemNota[] {
     if (linha.length < 3) continue;
 
     if (palavrasIgnorar.test(linha)) {
-      // Cabeçalho da tabela de itens
       if (/DESC|QT|VL UNIT|VL TOTAL/i.test(linha)) {
         dentroSecaoItens = true;
         continue;
       }
-      // Para quando encontrar TOTAL
       if (/^(?:to\s*al|total)/i.test(linha)) {
         break;
       }
@@ -482,20 +522,14 @@ function calcularConfianca(
   dados: DadosEstruturados,
   problemas: string[],
 ): { score: number; nivel: "Alta" | "Média" | "Baixa"; detalhes: string[] } {
-  // Começa com score perfeito
   let score = 1.0;
-
   const detalhes: string[] = [...problemas];
 
-  // PENALIDADES
-
-  // Estabelecimento não identificado
   if (dados.estabelecimento === "Estabelecimento não identificado") {
     score -= 0.2;
     detalhes.push("Estabelecimento não identificado");
   }
 
-  // CNPJ ausente
   if (!dados.cnpj) {
     score -= 0.15;
     detalhes.push("CNPJ não encontrado");
@@ -506,19 +540,16 @@ function calcularConfianca(
     detalhes.push("Data não identificada ou inválida");
   }
 
-  // Valor total ausente ou zero
   if (!dados.valorTotal || dados.valorTotal === 0) {
     score -= 0.3;
     detalhes.push("Valor total não encontrado");
   }
 
-  // Valor aproximado detectado
   if (dados.valorAproximado) {
     score -= 0.15;
     detalhes.push("Valor aproximado detectado - confiança reduzida");
   }
 
-  // Verifica consistência entre soma de itens e total/subtotal
   if (dados.itens && dados.itens.length > 0) {
     const somaItens = dados.itens.reduce(
       (acc, item) => acc + item.valorTotal,
@@ -526,16 +557,33 @@ function calcularConfianca(
     );
     const valorReferencia = dados.subtotal || dados.valorTotal;
     const diferenca = Math.abs(somaItens - valorReferencia);
+    const percentualDiferenca = (diferenca / valorReferencia) * 100;
 
     if (diferenca > 0.5) {
-      score -= 0.1;
-      detalhes.push(
-        `Inconsistência: soma itens (R$ ${somaItens.toFixed(2)}) vs ${dados.subtotal ? "subtotal" : "total"} (R$ ${valorReferencia.toFixed(2)})`,
-      );
+      // Penalidade progressiva baseada no percentual de diferença
+      if (percentualDiferenca > 20) {
+        score -= 0.3; // Diferença muito grande (>20%)
+        detalhes.push(
+          `🚨 Inconsistência grave: soma itens (R$ ${somaItens.toFixed(2)}) vs ${dados.subtotal ? "subtotal" : "total"} (R$ ${valorReferencia.toFixed(2)}) - diferença de R$ ${diferenca.toFixed(2)} (${percentualDiferenca.toFixed(0)}%)`,
+        );
+      } else if (percentualDiferenca > 10) {
+        score -= 0.2; // Diferença significativa (10-20%)
+        detalhes.push(
+          `⚠️ Inconsistência significativa: soma itens (R$ ${somaItens.toFixed(2)}) vs ${dados.subtotal ? "subtotal" : "total"} (R$ ${valorReferencia.toFixed(2)}) - diferença de R$ ${diferenca.toFixed(2)}`,
+        );
+      } else if (percentualDiferenca > 5) {
+        score -= 0.1; // Diferença moderada (5-10%)
+        detalhes.push(
+          `⚠️ Inconsistência moderada: soma itens (R$ ${somaItens.toFixed(2)}) vs ${dados.subtotal ? "subtotal" : "total"} (R$ ${valorReferencia.toFixed(2)}) - diferença de R$ ${diferenca.toFixed(2)}`,
+        );
+      } else {
+        score -= 0.05; // Diferença pequena (<5%)
+        detalhes.push(
+          `Pequena inconsistência: soma itens (R$ ${somaItens.toFixed(2)}) vs ${dados.subtotal ? "subtotal" : "total"} (R$ ${valorReferencia.toFixed(2)})`,
+        );
+      }
     }
   }
-
-  // BÔNUS
 
   if (dados.hora) {
     score += 0.05;
@@ -552,10 +600,8 @@ function calcularConfianca(
     detalhes.push("Informações adicionais extraídas");
   }
 
-  // Limita entre 0 e 1
   score = Math.max(0, Math.min(1, score));
 
-  // Determina nível
   let nivel: "Alta" | "Média" | "Baixa";
   if (score >= 0.8) nivel = "Alta";
   else if (score >= 0.5) nivel = "Média";

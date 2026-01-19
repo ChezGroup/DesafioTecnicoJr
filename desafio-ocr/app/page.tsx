@@ -110,9 +110,9 @@ export default function Home() {
 
     setProcessando(true);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        const res = processarTextoOCR(textoOCR);
+        const res = await processarTextoOCR(textoOCR);
         setResultado(res as ResultadoProcessado);
         console.log(`✅ Processado:`, res);
       } catch (error) {
