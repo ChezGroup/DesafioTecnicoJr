@@ -189,7 +189,6 @@ Este projeto foi desenvolvido como parte de um desafio técnico.
 
 ## 👤 Autor
 
-**Seu Nome**
 - GitHub: [@seu-usuario](https://github.com/ustavoteles)
 - LinkedIn: [Seu Perfil](https://linkedin.com/in/ustavoteles)
 
