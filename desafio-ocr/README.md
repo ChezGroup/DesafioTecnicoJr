@@ -1,36 +1,217 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Processador de OCR - Desafio Técnico
 
-## Getting Started
+## 🚀 Deploy
 
-First, run the development server:
+🔗 [Ver aplicação em produção](https://seu-projeto.vercel.app)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## 📋 Sobre o Projeto
+
+Sistema de processamento de textos extraídos via OCR (Optical Character Recognition) que transforma dados brutos e imperfeitos em informações estruturadas e validadas.
+
+A aplicação processa cupons fiscais, notas e documentos digitalizados, lidando com:
+- Erros de leitura do OCR
+- Formatação inconsistente
+- Dados incompletos ou ambíguos
+- Caracteres especiais mal interpretados
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+### Core
+- **[Next.js 15](https://nextjs.org/)** - Framework React com App Router
+- **[TypeScript](https://www.typescriptlang.org/)** - Tipagem estática
+- **[React 19](https://react.dev/)** - Biblioteca de interface
+
+### UI/UX
+- **[shadcn/ui](https://ui.shadcn.com/)** - Componentes de interface
+- **[Tailwind CSS](https://tailwindcss.com/)** - Estilização
+- **[Lucide React](https://lucide.dev/)** - Ícones
+
+### Validação e Processamento
+- **[Zod](https://zod.dev/)** - Validação de schemas e tipos
+- **[date-fns](https://date-fns.org/)** - Manipulação de datas
+
+### IA
+- **[Google Gemini API](https://ai.google.dev/)** - Correção inteligente de dados com baixa confiança
+
+---
+
+## 🎯 Decisões Técnicas Importantes
+
+### 1. **Arquitetura Híbrida de Processamento**
+
+Implementei uma abordagem em **duas camadas**:
+
+#### **Camada 1 - Regex Pattern Matching** (`lib/ocr-processor.ts`)
+- Processamento inicial usando expressões regulares
+- Rápido e determinístico
+- Gera um score de confiança baseado em:
+  - Campos obrigatórios presentes
+  - Validações de formato
+  - Consistência de dados
+
+#### **Camada 2 - IA para Correção** (acionada condicionalmente)
+- **Trigger:** Apenas quando confiança < 0.7
+- **Objetivo:** Corrigir erros de OCR (ex: `6.5O` → `6.50`, `ar oz` → `arroz`)
+- **Vantagem:** Não desperdiça recursos da API em dados já confiáveis
+
+**Por que essa abordagem?**
+- ✅ Eficiência: 70%+ dos casos são resolvidos com regex (sem custo de API)
+- ✅ Inteligência sob demanda: IA só atua quando realmente necessário
+- ✅ Transparência: Interface mostra evolução "Regex → IA Fix → Final"
+
+### 2. **Escolha do Google Gemini**
+
+**Por que Gemini em vez de OpenAI/Anthropic?**
+- ✅ **Gratuito:** Tier gratuito generoso para testes e desenvolvimento
+- ✅ **Atualizado:** Modelo recente com boa performance em PT-BR
+- ✅ **API simples:** Fácil integração com `@google/generative-ai`
+
+**Trade-offs considerados:**
+- ⚠️ Rate limits mais restritos que GPT-4
+- ⚠️ Menor adoção enterprise (mas suficiente para o desafio)
+
+
+**Critérios de confiança:**
+- **Alta:** Todos os campos obrigatórios válidos, sem correções necessárias
+- **Média:** Campos presentes, mas com normalização de OCR (ex: `O` → `0`)
+- **Baixa:** Dados incompletos, valores aproximados ou muitas correções
+
+### 4. **Componentização Modular**
+
+Dividi a interface em 6 componentes independentes:
+- `SeletorTextoCard`: Seleção de exemplos/texto customizado
+- `TextoOCRCard`: Visualização do texto bruto
+- `ResultadoCard`: Dados estruturados principais
+- `ItensCard`: Lista de produtos/serviços
+- `ConfiancaCard`: Análise de confiança com evolução
+- `page.tsx`: Orquestração (~80 linhas vs ~600 originais)
+
+**Benefícios:**
+- Facilita testes unitários
+- Reutilização de componentes
+- Manutenção simplificada
+
+### 5. **Validação com Zod**
+
+Uso de schemas Zod para:
+- Garantir tipos seguros em runtime
+- Validação de CNPJ, datas, valores
+- Transformação de dados (strings → números, normalização)
+
+**Exemplo:**
+```typescript
+const ItemSchema = z.object({
+  descricao: z.string().min(1),
+  quantidade: z.number().positive(),
+  valorUnitario: z.number().nonnegative(),
+  valorTotal: z.number().nonnegative(),
+});
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🏃‍♂️ Como Rodar Localmente
 
-## Learn More
+### Pré-requisitos
+- Node.js 18+ 
+- npm ou yarn
 
-To learn more about Next.js, take a look at the following resources:
+### Passo 1: Clonar o repositório
+```bash
+git clone https://github.com/seu-usuario/desafio-ocr.git
+cd desafio-ocr
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Passo 2: Instalar dependências
+```bash
+npm install
+# ou
+yarn install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Passo 3: Configurar variáveis de ambiente
 
-## Deploy on Vercel
+Crie um arquivo `.env.local` na raiz do projeto:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+GOOGLE_API_KEY=sua_chave_api_aqui
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Como obter a chave da API:**
+1. Acesse [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Crie uma nova API Key
+3. Cole no arquivo `.env.local`
+
+### Passo 4: Rodar o projeto
+```bash
+npm run dev
+# ou
+yarn dev
+```
+
+Acesse [http://localhost:3000](http://localhost:3000) no navegador.
+
+---
+
+## 📂 Estrutura do Projeto
+
+```
+├── app/
+│   ├── page.tsx                 # Página principal (orquestração)
+│   └── layout.tsx               # Layout global
+├── components/
+│   ├── ui/                      # Componentes shadcn/ui
+│   └── ocr/                     # Componentes específicos do OCR
+│       ├── SeletorTextoCard.tsx
+│       ├── TextoOCRCard.tsx
+│       ├── ResultadoCard.tsx
+│       ├── ItensCard.tsx
+│       └── ConfiancaCard.tsx
+├── lib/
+│   ├── ocr-processor.ts         # Lógica de processamento (Regex)
+│   ├── ia-processor.ts          # Correção com Gemini
+│   └── utils.ts                 # Funções auxiliares
+├── data/
+│   └── sample-data.ts           # Exemplos de cupons (níveis de dificuldade)
+└── .env.local                   # Variáveis de ambiente (não commitado)
+```
+
+---
+
+
+## 📊 Exemplos Processados
+
+A aplicação inclui 7 exemplos pré-configurados com níveis crescentes de dificuldade:
+
+| Nível | Exemplo | Principais Desafios |
+|-------|---------|---------------------|
+| Fácil | Supermercado Ideal | Múltiplos valores por item |
+| Médio-Baixo | Farmácia Saúde Mais | `6.5O` (O vs 0), formatos mistos |
+| Médio | Auto Posto BR 101 | Valor aproximado, cálculo implícito |
+| Médio-Alto | Bar e Lanches Central | Subtotal vs total, taxa de serviço |
+| Difícil | Mercado do Bairro | Palavras quebradas, CNPJ sem formatação |
+| Extremo | Padaria Aurora | OCR extremamente degradado |
+| Borda | Restaurante Gourmet | Cupom válido mas sem estrutura clara |
+
+---
+
+
+## 📝 Licença
+
+Este projeto foi desenvolvido como parte de um desafio técnico.
+
+---
+
+## 👤 Autor
+
+**Seu Nome**
+- GitHub: [@seu-usuario](https://github.com/ustavoteles)
+- LinkedIn: [Seu Perfil](https://linkedin.com/in/ustavoteles)
+
+---
+
