@@ -9,12 +9,61 @@ import { ResultadoCard } from "@/components/ocr/ResultadoCard";
 import { ItensCard } from "@/components/ocr/ItensCard";
 import { ConfiancaCard } from "@/components/ocr/ConfiancaCard";
 
+// ============================================
+// TIPOS
+// ============================================
+
+interface ResultadoProcessado {
+  dados: {
+    estabelecimento: string;
+    cnpj?: string;
+    data: string;
+    hora?: string;
+    itens?: Array<{
+      descricao: string;
+      quantidade: number;
+      valorUnitario: number;
+      valorTotal: number;
+    }>;
+    subtotal?: number;
+    valorTotal: number;
+    valorAproximado?: boolean;
+    observacoes?: string;
+    formaPagamento?: string;
+  };
+  confianca: {
+    score: number;
+    nivel: "Alta" | "Média" | "Baixa";
+    detalhes: string[];
+  };
+  confiancaInicial?: {
+    score: number;
+    nivel: string;
+    detalhes: string[];
+  };
+}
+
+interface ResultadoErro {
+  erro: true;
+  mensagem: Error | unknown;
+}
+
+type Resultado = ResultadoProcessado | ResultadoErro | null;
+
+type ExemplosAgrupados = Record<string, typeof todosExemplos>;
+
+// ============================================
+// COMPONENTE
+// ============================================
+
 export default function Home() {
   const [textoOCR, setTextoOCR] = useState("");
-  const [resultado, setResultado] = useState(null);
+  const [resultado, setResultado] = useState<
+    ResultadoProcessado | ResultadoErro | null
+  >(null);
   const [exemploAtual, setExemploAtual] = useState("");
   const [processando, setProcessando] = useState(false);
-  const [modoAtual, setModoAtual] = useState("exemplos");
+  const [modoAtual, setModoAtual] = useState<"exemplos" | "custom">("exemplos");
 
   const carregarExemplo = (texto: string, nome: string) => {
     setTextoOCR(texto);
@@ -35,7 +84,7 @@ export default function Home() {
     setProcessando(true);
     try {
       const res = await processarTextoOCR(textoOCR);
-      setResultado(res);
+      setResultado(res as ResultadoProcessado);
     } catch (error) {
       setResultado({ erro: true, mensagem: error });
     } finally {
@@ -43,23 +92,37 @@ export default function Home() {
     }
   };
 
-  const exemplosAgrupados = todosExemplos.reduce((acc, exemplo) => {
-    const nivel = exemplo.nivel;
-    if (!acc[nivel]) acc[nivel] = [];
-    acc[nivel].push(exemplo);
-    return acc;
-  }, {});
+  const exemplosAgrupados: ExemplosAgrupados = todosExemplos.reduce(
+    (acc, exemplo) => {
+      const nivel = exemplo.nivel;
+      if (!acc[nivel]) acc[nivel] = [];
+      acc[nivel].push(exemplo);
+      return acc;
+    },
+    {} as ExemplosAgrupados,
+  );
 
-  const getCorNivel = (nivel: string) => {
-    const cores = {
+  const getCorNivel = (nivel: string): string => {
+    const cores: Record<string, string> = {
       Fácil: "bg-green-500",
       "Médio-Baixo": "bg-blue-500",
       Médio: "bg-yellow-500",
       "Médio-Alto": "bg-orange-500",
       Difícil: "bg-red-500",
       Extremo: "bg-purple-500",
+      Borda: "bg-gray-500",
     };
     return cores[nivel] || "bg-gray-400";
+  };
+
+  // Type guard para verificar se é erro
+  const isErro = (res: Resultado): res is ResultadoErro => {
+    return res !== null && "erro" in res;
+  };
+
+  // Type guard para verificar se é resultado válido
+  const isResultadoValido = (res: Resultado): res is ResultadoProcessado => {
+    return res !== null && !("erro" in res);
   };
 
   return (
@@ -96,7 +159,7 @@ export default function Home() {
 
           {/* COLUNA 3: Resultados */}
           <div className="space-y-4">
-            {resultado && !resultado.erro && (
+            {isResultadoValido(resultado) && (
               <>
                 <ResultadoCard
                   resultado={resultado}
@@ -113,6 +176,34 @@ export default function Home() {
                   confiancaInicial={resultado.confiancaInicial}
                 />
               </>
+            )}
+
+            {isErro(resultado) && (
+              <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                <h3 className="text-red-800 font-semibold mb-2">
+                  Erro ao processar
+                </h3>
+                <p className="text-red-600 text-sm">
+                  {resultado.mensagem instanceof Error
+                    ? resultado.mensagem.message
+                    : "Erro desconhecido"}
+                </p>
+              </div>
+            )}
+
+            {!resultado && !processando && (
+              <div className="bg-slate-50 border-2 border-dashed border-slate-300 p-12 rounded-lg text-center">
+                <p className="text-slate-500">
+                  Selecione um exemplo ou cole um texto para começar
+                </p>
+              </div>
+            )}
+
+            {processando && (
+              <div className="bg-white border border-slate-200 p-12 rounded-lg text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-800 mx-auto mb-4"></div>
+                <p className="text-slate-600">Processando...</p>
+              </div>
             )}
           </div>
         </div>

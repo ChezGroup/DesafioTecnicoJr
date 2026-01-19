@@ -186,18 +186,7 @@ Acesse [http://localhost:3000](http://localhost:3000) no navegador.
 
 ## 📊 Exemplos Processados
 
-A aplicação inclui 7 exemplos pré-configurados com níveis crescentes de dificuldade:
-
-| Nível | Exemplo | Principais Desafios |
-|-------|---------|---------------------|
-| Fácil | Supermercado Ideal | Múltiplos valores por item |
-| Médio-Baixo | Farmácia Saúde Mais | `6.5O` (O vs 0), formatos mistos |
-| Médio | Auto Posto BR 101 | Valor aproximado, cálculo implícito |
-| Médio-Alto | Bar e Lanches Central | Subtotal vs total, taxa de serviço |
-| Difícil | Mercado do Bairro | Palavras quebradas, CNPJ sem formatação |
-| Extremo | Padaria Aurora | OCR extremamente degradado |
-| Borda | Restaurante Gourmet | Cupom válido mas sem estrutura clara |
-
+A aplicação inclui exemplos pré-configurados com diferentes níveis de complexidade, simulando cupons e documentos reais com falhas de OCR.
 ---
 
 

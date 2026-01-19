@@ -147,6 +147,8 @@ export async function processarTextoOCR(
     return resultadoRegex;
   }
 
+  return resultadoRegex;
+
   function corrigirErrosOCR(texto: string): string {
     let corrigido = texto;
 
