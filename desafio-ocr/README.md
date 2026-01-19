@@ -2,7 +2,7 @@
 
 ## 🚀 Deploy
 
-🔗 [Ver aplicação em produção](https://seu-projeto.vercel.app)
+🔗 [Ver aplicação em produção](https://desafio-tecnico-jr-f-git-5d3889-gustavo-teles-projects-9a9238b1.vercel.app/)
 
 ---
 
@@ -102,15 +102,6 @@ Uso de schemas Zod para:
 - Validação de CNPJ, datas, valores
 - Transformação de dados (strings → números, normalização)
 
-**Exemplo:**
-```typescript
-const ItemSchema = z.object({
-  descricao: z.string().min(1),
-  quantidade: z.number().positive(),
-  valorUnitario: z.number().nonnegative(),
-  valorTotal: z.number().nonnegative(),
-});
-```
 
 ---
 

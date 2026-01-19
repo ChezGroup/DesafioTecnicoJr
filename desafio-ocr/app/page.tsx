@@ -8,6 +8,7 @@ import { TextoOCRCard } from "@/components/ocr/TextoOCRCard";
 import { ResultadoCard } from "@/components/ocr/ResultadoCard";
 import { ItensCard } from "@/components/ocr/ItensCard";
 import { ConfiancaCard } from "@/components/ocr/ConfiancaCard";
+import { JsonCard } from "@/components/ocr/JsonCard";
 
 // ============================================
 // TIPOS
@@ -36,11 +37,13 @@ interface ResultadoProcessado {
     nivel: "Alta" | "Média" | "Baixa";
     detalhes: string[];
   };
-  confiancaInicial?: {
-    score: number;
-    nivel: string;
-    detalhes: string[];
-  };
+  confiancaInicial?: Confianca;
+}
+
+interface Confianca {
+  score: number;
+  nivel: "Alta" | "Média" | "Baixa";
+  detalhes: string[];
 }
 
 interface ResultadoErro {
@@ -175,6 +178,7 @@ export default function Home() {
                   confianca={resultado.confianca}
                   confiancaInicial={resultado.confiancaInicial}
                 />
+                <JsonCard resultado={resultado} />
               </>
             )}
 

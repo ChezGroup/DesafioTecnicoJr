@@ -28,7 +28,6 @@ export async function processarTextoOCR(
   if (dataExtraida) {
     dados.data = dataExtraida;
   } else {
-    dados.data = "Data não identificada";
     problemasEncontrados.push("Data não pôde ser extraída ou validada");
   }
 
@@ -336,24 +335,36 @@ export async function processarTextoOCR(
   }
 
   function extrairData(texto: string): string | undefined {
-    const regexData =
+    // Primeiro tenta com prefixos explícitos (Data:, Dt:, etc)
+    const regexComPrefixo =
       /(?:data|da\s*a|dt)[:\s\-]*(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/i;
-    const match = texto.match(regexData);
+    let match = texto.match(regexComPrefixo);
+
+    // Se não encontrar, tenta buscar data sem prefixo
+    if (!match) {
+      // Busca padrão DD/MM/YYYY ou DD-MM-YYYY em qualquer lugar
+      const regexSemPrefixo = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/;
+      match = texto.match(regexSemPrefixo);
+    }
 
     if (match) {
       let [_, dia, mes, ano] = match;
 
+      // Converte ano de 2 dígitos para 4
       if (ano.length === 2) {
         ano = "20" + ano;
       }
+
       dia = dia.padStart(2, "0");
       mes = mes.padStart(2, "0");
 
       const dataStr = `${dia}/${mes}/${ano}`;
 
+      // Valida se é uma data real
       const dataObj = parse(dataStr, "dd/MM/yyyy", new Date(), {
         locale: ptBR,
       });
+
       if (isValid(dataObj)) {
         return format(dataObj, "yyyy-MM-dd");
       }
